@@ -98,6 +98,9 @@ usage() {
     echo "    --types <names>      Comma-separated type tags (e.g. Recursion,Lists,guia_1)"
     echo "    --private            Do not make the problem public"
     echo ""
+    echo -e "${CYAN}Scheme (Unit-Test) Problems:${NC}"
+    echo "  deploy-scheme-problem <code>  Deploy R5RS unit-test problem to judge"
+    echo ""
     echo -e "${CYAN}Data Import (REST API):${NC}"
     echo "  load-students <csv>    Import students from CSV via API"
     echo "  load-teachers <csv>    Import teachers from CSV via API (staff + org admin)"
@@ -428,6 +431,45 @@ cmd_load_data() {
     fi
 }
 
+cmd_deploy_scheme_problem() {
+    local code="$1"
+    if [ -z "$code" ]; then
+        error "Usage: ./manage.sh deploy-scheme-problem <problem-code>"
+        exit 1
+    fi
+
+    local src="$SCRIPT_DIR/scheme-example/$code"
+    local dst="$SCRIPT_DIR/data/problems/$code"
+
+    if [ ! -d "$src" ]; then
+        error "Problem source not found: $src"
+        echo "  Available problems:"
+        ls "$SCRIPT_DIR/scheme-example/" 2>/dev/null | grep -v README
+        exit 1
+    fi
+
+    if [ ! -f "$src/init.yml" ]; then
+        error "Missing init.yml in $src"
+        exit 1
+    fi
+    if [ ! -f "$src/tests.rkt" ]; then
+        error "Missing tests.rkt in $src"
+        exit 1
+    fi
+
+    mkdir -p "$dst"
+
+    # Copy problem files
+    cp "$src/init.yml" "$dst/"
+    cp "$src/tests.rkt" "$dst/"
+
+    # Copy grader from judge infrastructure
+    cp "$SCRIPT_DIR/judge/scheme_grader.py" "$dst/grader.py"
+
+    info "Deployed scheme problem '${BOLD}$code${NC}' to $dst"
+    ls -la "$dst/"
+}
+
 cmd_exec() {
     if [ -z "$1" ] || [ -z "$2" ]; then
         error "Usage: ./manage.sh exec <service> <command> [args...]"
@@ -502,6 +544,7 @@ case "${1:-}" in
     add-org)        shift; cmd_add_org "$@" ;;
     add-teacher)    shift; cmd_add_teacher "$@" ;;
     create-problem) shift; cmd_create_problem "$@" ;;
+    deploy-scheme-problem) shift; cmd_deploy_scheme_problem "$@" ;;
     load-students)  shift; cmd_load_data students "$@" ;;
     load-teachers)  shift; cmd_load_data teachers "$@" ;;
     load-problems)  shift; cmd_load_data problems "$@" ;;

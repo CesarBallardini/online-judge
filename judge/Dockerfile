@@ -24,9 +24,10 @@ RUN mkdir -p /judge /problems /tmp/judge_cache && \
     chown -R judge:judge /judge /problems /tmp/judge_cache
 
 COPY start-judge.sh /judge/start-judge.sh
+COPY scheme_grader.py /judge/scheme_grader.py
 RUN sed -i 's/\r//' /judge/start-judge.sh && \
     chmod +x /judge/start-judge.sh && \
-    chown judge:judge /judge/start-judge.sh
+    chown judge:judge /judge/start-judge.sh /judge/scheme_grader.py
 
 WORKDIR /judge
 

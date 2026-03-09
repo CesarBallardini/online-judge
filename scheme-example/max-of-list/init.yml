@@ -1,0 +1,12 @@
+custom_judge: grader.py
+test_cases:
+  - {points: 10}
+  - {points: 10}
+  - {points: 10}
+  - {points: 10}
+  - {points: 15}
+  - {points: 15}
+  - {points: 10}
+  - {points: 10}
+  - {points: 5}
+  - {points: 5}
