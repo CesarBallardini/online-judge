@@ -35,7 +35,6 @@ fi
 MYSQL_DATABASE="${MYSQL_DATABASE:-dmoj}"
 MYSQL_USER="${MYSQL_USER:-dmoj}"
 MYSQL_PASSWORD="${MYSQL_PASSWORD:-dmoj_password}"
-ADMIN_API_KEY="${ADMIN_API_KEY:-}"
 HOST_IP="${HOST_IP:-localhost}"
 SITE_URL="http://${HOST_IP}"
 
@@ -70,6 +69,34 @@ usage() {
     echo -e "${CYAN}Setup:${NC}"
     echo "  init              First-time setup: copy .env, generate secrets, build, start"
     echo "  check             Run Django system checks"
+    echo ""
+    echo -e "${CYAN}Organizations:${NC}"
+    echo "  add-org                Create an organization"
+    echo "    --name <name>        Display name (required)"
+    echo "    --slug <slug>        URL slug (required, lowercase, no spaces)"
+    echo "    --short-name <name>  Short name / abbreviation (default: same as name)"
+    echo ""
+    echo -e "${CYAN}Users:${NC}"
+    echo "  add-teacher            Create a teacher account (staff + org admin)"
+    echo "    --username <user>    Login username (required)"
+    echo "    --password <pw>      Password (auto-generated if omitted)"
+    echo "    --email <email>      Email address"
+    echo "    --first-name <name>  First name"
+    echo "    --last-name <name>   Last name"
+    echo "    --organization <slug> Organization to join as admin"
+    echo ""
+    echo -e "${CYAN}Problems:${NC}"
+    echo "  create-problem         Create a problem in the database"
+    echo "    --code <slug>        Problem code (required, must match folder in data/problems/)"
+    echo "    --name <name>        Display name (required)"
+    echo "    --description <txt>  Problem statement (default: 'Problem: <name>')"
+    echo "    --time-limit <sec>   Time limit in seconds (default: 2.0)"
+    echo "    --memory-limit <kb>  Memory limit in KB (default: 262144)"
+    echo "    --points <pts>       Base points (default: 1.0)"
+    echo "    --group <name>       Problem group/category (default: Uncategorized)"
+    echo "    --languages <keys>   Comma-separated language keys (default: all)"
+    echo "    --types <names>      Comma-separated type tags (e.g. Recursion,Lists,guia_1)"
+    echo "    --private            Do not make the problem public"
     echo ""
     echo -e "${CYAN}Data Import (REST API):${NC}"
     echo "  load-students <csv>    Import students from CSV via API"
@@ -250,15 +277,12 @@ cmd_init() {
         secret_key=$(openssl rand -hex 32)
         judge_key=$(openssl rand -hex 32)
         bridge_key=$(openssl rand -hex 32)
-        admin_key=$(openssl rand -hex 32)
-
         sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$secret_key|" "$SCRIPT_DIR/.env"
         sed -i "s|^JUDGE_KEY=.*|JUDGE_KEY=$judge_key|" "$SCRIPT_DIR/.env"
         sed -i "s|^BRIDGE_API_KEY=.*|BRIDGE_API_KEY=$bridge_key|" "$SCRIPT_DIR/.env"
-        sed -i "s|^ADMIN_API_KEY=.*|ADMIN_API_KEY=$admin_key|" "$SCRIPT_DIR/.env"
         info "Secret keys generated and written to .env"
     else
-        warn "openssl not found. Please manually set SECRET_KEY, JUDGE_KEY, BRIDGE_API_KEY, and ADMIN_API_KEY in .env"
+        warn "openssl not found. Please manually set SECRET_KEY, JUDGE_KEY, and BRIDGE_API_KEY in .env"
     fi
 
     # 3. Database passwords
@@ -331,6 +355,21 @@ cmd_check() {
     $COMPOSE_CMD exec site python manage.py check
 }
 
+cmd_add_org() {
+    info "Creating organization..."
+    $COMPOSE_CMD exec -T site python manage.py add_organization "$@"
+}
+
+cmd_add_teacher() {
+    info "Creating teacher..."
+    $COMPOSE_CMD exec -T site python manage.py add_teacher "$@"
+}
+
+cmd_create_problem() {
+    info "Creating problem..."
+    $COMPOSE_CMD exec -T site python manage.py add_problem "$@"
+}
+
 cmd_load_data() {
     local endpoint="$1"
     local csv_file="$2"
@@ -347,9 +386,13 @@ cmd_load_data() {
         exit 1
     fi
 
-    if [ -z "$ADMIN_API_KEY" ]; then
-        error "ADMIN_API_KEY is not set. Add it to .env or export it."
-        exit 1
+    if [ -z "$BEARER_TOKEN" ]; then
+        info "Generating API token for admin user..."
+        BEARER_TOKEN=$(docker-compose exec -T site python manage.py generate_api_token admin 2>/dev/null | tr -d '\r\n')
+        if [ -z "$BEARER_TOKEN" ]; then
+            error "Failed to generate API token. Make sure the 'admin' user exists."
+            exit 1
+        fi
     fi
 
     local url="${SITE_URL}/api/admin/load-${endpoint}/"
@@ -362,7 +405,7 @@ cmd_load_data() {
     local http_response
     http_response=$(curl -s -w "\n%{http_code}" \
         -X POST \
-        -H "Authorization: Bearer ${ADMIN_API_KEY}" \
+        -H "Authorization: Bearer ${BEARER_TOKEN}" \
         -F "file=@${csv_file}" \
         "$url" 2>&1)
 
@@ -456,6 +499,9 @@ case "${1:-}" in
     dbshell)        cmd_dbshell ;;
     init)           cmd_init ;;
     check)          cmd_check ;;
+    add-org)        shift; cmd_add_org "$@" ;;
+    add-teacher)    shift; cmd_add_teacher "$@" ;;
+    create-problem) shift; cmd_create_problem "$@" ;;
     load-students)  shift; cmd_load_data students "$@" ;;
     load-teachers)  shift; cmd_load_data teachers "$@" ;;
     load-problems)  shift; cmd_load_data problems "$@" ;;

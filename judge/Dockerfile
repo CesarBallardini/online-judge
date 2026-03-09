@@ -1,56 +1,33 @@
 FROM python:3.11-slim
 
-USER root
-
-# Install system dependencies and language runtimes
-RUN apt-get update && apt-get install -y \
-    # Build tools
-    gcc \
-    g++ \
-    make \
-    libffi-dev \
-    libssl-dev \
-    libseccomp-dev \
-    git \
-    curl \
+# System deps for building dmoj judge + sandbox + networking
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ libseccomp-dev \
     netcat-openbsd \
-    # Language runtimes
-    default-jdk-headless \
-    ruby \
-    php-cli \
-    perl \
-    rustc \
-    ghc \
-    golang-go \
-    mono-mcs \
-    fp-compiler \
-    nasm \
-    lua5.4 \
+    # Language runtimes (Python 3 comes from base image)
+    racket \
     swi-prolog \
-    gawk \
-    sed \
-    bc \
     && rm -rf /var/lib/apt/lists/*
 
-# Update pip and install DMOJ judge + Python support
-RUN pip install --upgrade pip && pip install dmoj
+RUN useradd -m judge
 
-# Create judge user
-RUN useradd -m -U judge
+# Install DMOJ judge in a venv
+RUN python3 -m venv /env && \
+    /env/bin/pip3 install cython setuptools && \
+    /env/bin/pip3 install dmoj
 
-# Create necessary directories and set permissions
+# Patch isolate.py to fix Racket sandbox bug (remove once dmoj > 4.1.0)
+COPY patch_isolate.py /tmp/patch_isolate.py
+RUN python3 /tmp/patch_isolate.py && rm /tmp/patch_isolate.py
+
 RUN mkdir -p /judge /problems /tmp/judge_cache && \
     chown -R judge:judge /judge /problems /tmp/judge_cache
 
-# Copy startup script
 COPY start-judge.sh /judge/start-judge.sh
 RUN sed -i 's/\r//' /judge/start-judge.sh && \
     chmod +x /judge/start-judge.sh && \
     chown judge:judge /judge/start-judge.sh
 
 WORKDIR /judge
-USER judge
-
-EXPOSE 9999
 
 CMD ["/judge/start-judge.sh"]

@@ -3,16 +3,19 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .authentication import AdminAPIKeyAuthentication
 from .loader import load_problems, load_users, parse_csv
-from .permissions import HasValidAPIKey
+from .permissions import IsStaffUser
 
 
 class BaseLoadView(APIView):
-    """Base class for CSV upload endpoints."""
+    """Base class for CSV upload endpoints.
 
-    authentication_classes = [AdminAPIKeyAuthentication]
-    permission_classes = [HasValidAPIKey]
+    Authentication is handled by DMOJ's APIMiddleware which processes
+    the Authorization: Bearer <token> header and sets request.user.
+    """
+
+    authentication_classes = []
+    permission_classes = [IsStaffUser]
     parser_classes = [MultiPartParser, FormParser]
 
     def _read_csv(self, request):

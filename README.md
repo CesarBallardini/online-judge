@@ -49,38 +49,14 @@ All configuration lives in `.env`. Key variables:
 | `MYSQL_ROOT_PASSWORD` | MariaDB root password |
 | `MYSQL_PASSWORD` | MariaDB application password |
 | `SECRET_KEY` | Django signing key (generate with `openssl rand -hex 32`) |
-| `JUDGE_NAME` | Judge identifier (must match admin panel) |
-| `JUDGE_KEY` | Judge authentication key (must match admin panel) |
+| `JUDGE_NAME` | Judge identifier (auto-registered at startup) |
+| `JUDGE_KEY` | Judge authentication key |
 | `BRIDGE_API_KEY` | Bridge communication key |
-| `ADMIN_API_KEY` | API key for bulk-load endpoints |
 | `TIME_ZONE` | Server timezone (e.g. `America/Argentina/Buenos_Aires`) |
 
 ## Judge Setup
 
-After the site is running, the judge must be registered in the database before it can authenticate.
-
-### Option A: Admin Panel
-
-1. Go to `http://<HOST_IP>/admin/`
-2. Navigate to **Judges** > **Add Judge**
-3. Set **Name** to the value of `JUDGE_NAME` in `.env` (e.g. `paradigmas`)
-4. Set **Authentication key** to the value of `JUDGE_KEY` in `.env`
-5. Save
-
-### Option B: Django Shell
-
-```bash
-./manage.sh shell
-```
-
-```python
-from judge.models import Judge
-Judge.objects.create(
-    name='paradigmas',           # must match JUDGE_NAME in .env
-    auth_key='<JUDGE_KEY value from .env>',
-    is_blocked=False
-)
-```
+The judge is **automatically registered** at startup using `JUDGE_NAME` and `JUDGE_KEY` from `.env`. No manual registration is needed.
 
 ### Verify the Judge
 
@@ -92,11 +68,36 @@ Judge.objects.create(
 ./manage.sh logs -n 50 bridged
 ```
 
-You should see `Judge paradigmas authenticated` in the bridge logs. The judge will also appear as **online** in the admin panel under Judges, with its detected language executors (C, C++, Python, Java, etc.).
+You should see `Judge "juez_paradigmas" online` in the judge logs and `judge successfully authenticated` in the bridge logs. The judge will also appear as **online** in the admin panel under Judges, with its detected language executors.
 
-## Loading Teachers
+## Adding a Teacher
 
-Prepare a CSV file with the format:
+```bash
+./manage.sh add-teacher \
+  --username functional_robot \
+  --password "myLongAndinoperantPassword123" \
+  --email "functional_robot@ibm.com" \
+  --first-name "Functional" \
+  --last-name "Robot" \
+  --organization "Paradigmas"
+```
+
+All options:
+
+| Option           | Required | Default        | Description                        |
+|------------------|----------|----------------|------------------------------------|
+| `--username`     | yes      |                | Login username                     |
+| `--password`     | no       | auto-generated | Password (printed on creation)     |
+| `--email`        | no       |                | Email address                      |
+| `--first-name`   | no       |                | First name                         |
+| `--last-name`    | no       |                | Last name                          |
+| `--organization` | no       |                | Organization slug to join as admin |
+
+Teachers are created as **staff** users. If `--organization` is provided, the teacher is added as a **member and admin** of that organization.
+
+### Bulk Import (CSV)
+
+To add many teachers at once, prepare a CSV file:
 
 ```
 username,password,email,first_name,last_name,organization
@@ -104,20 +105,11 @@ prof_garcia,,garcia@school.edu,Maria,Garcia,Paradigmas
 prof_chen,,chen@school.edu,Wei,Chen,Paradigmas
 ```
 
-- Leave `password` empty to auto-generate one
-- `organization` must match an existing organization name
-
 Then run:
 
 ```bash
-# Validate first (no changes saved)
-./manage.sh load-teachers teachers.csv --dry-run
-
-# Import for real
 ./manage.sh load-teachers teachers.csv
 ```
-
-Teachers are created as **staff** users with **organization admin** permissions.
 
 ## Loading Students
 
@@ -190,6 +182,12 @@ Database:
 Setup:
   init              First-time setup: copy .env, generate secrets, build, start
   check             Run Django system checks
+
+Users:
+  add-teacher            Create a single teacher account (see options with --help)
+
+Problems:
+  create-problem         Create a single problem (see options with --help)
 
 Data Import (REST API):
   load-students <csv>    Import students from CSV via API

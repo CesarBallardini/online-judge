@@ -68,6 +68,9 @@ TIME_ZONE = os.getenv('TIME_ZONE', 'UTC')
 # Debug
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
+# Email -- log to console instead of sending (no SMTP server configured)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
 # Compression
 COMPRESS_ENABLED = True
 COMPRESS_OFFLINE = False
@@ -139,9 +142,6 @@ INSTALLED_APPS = list(INSTALLED_APPS) + [
     'rest_framework',
     'custom_commands',
 ]
-
-# Admin API key for bulk-load endpoints (Authorization: Bearer <key>)
-ADMIN_API_KEY = os.getenv('ADMIN_API_KEY', '')
 
 # Django REST Framework -- only allow explicit authentication, no browsable API
 REST_FRAMEWORK = {

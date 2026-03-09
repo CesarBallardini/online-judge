@@ -89,6 +89,8 @@ if [ "$RUN_MIGRATIONS" = "true" ]; then
   echo "Loading initial fixtures..."
   python manage.py loaddata navbar || echo "Navbar fixture already loaded or not found"
   python manage.py loaddata language_small || echo "Language fixture already loaded or not found"
+  python manage.py seed_extra_languages
+  python manage.py seed_judge
   python manage.py loaddata demo || echo "Demo fixture already loaded or not found"
   python manage.py collectstatic --noinput
 else

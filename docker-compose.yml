@@ -11,7 +11,8 @@ x-site-environment: &site-env
   TIME_ZONE: ${TIME_ZONE:-UTC}
   SITE_URL: http://${HOST_IP:-localhost}
   DEBUG: ${DEBUG:-False}
-  ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+  JUDGE_NAME: ${JUDGE_NAME:-paradigmas}
+  JUDGE_KEY: ${JUDGE_KEY:-}
   DJANGO_SETTINGS_MODULE: dmoj.docker_settings
 
 services:
@@ -142,8 +143,6 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     privileged: true
-    cap_add:
-      - SYS_ADMIN
     volumes:
       - ./data/problems:/problems:ro
       - ./data/judge_cache:/tmp/judge_cache/

@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-# Wait for bridged service to be available
 echo "Waiting for DMOJ bridged service..."
 while ! nc -z bridged 9999 2>/dev/null; do
   echo "Bridged service not ready, waiting..."
@@ -9,22 +8,17 @@ while ! nc -z bridged 9999 2>/dev/null; do
 done
 echo "Bridged service is up!"
 
-# Auto-detect available language runtimes
-echo "Auto-detecting language runtimes..."
-dmoj-autoconf > /judge/runtime.yml 2>/dev/null || true
+# Detect runtimes at startup (needs privileged mode for sandbox self-tests)
+echo "Detecting language runtimes..."
+/env/bin/dmoj-autoconf -V > /judge/runtime.yml 2>/dev/null || true
 
-echo "--- Detected runtimes ---"
-cat /judge/runtime.yml
-echo "-------------------------"
-
-# Create judge configuration from environment variables + detected runtimes
+# Create judge config
 cat > /judge/judge.yml << EOF
 id: ${JUDGE_NAME}
 key: ${JUDGE_KEY}
 problem_storage_root: /problems
 EOF
 
-# Append runtime config if any runtimes were detected
 if [ -s /judge/runtime.yml ]; then
     echo "" >> /judge/judge.yml
     cat /judge/runtime.yml >> /judge/judge.yml
@@ -34,6 +28,6 @@ echo "--- Final judge.yml ---"
 cat /judge/judge.yml
 echo "-----------------------"
 
-# Start the judge
 echo "Starting judge: ${JUDGE_NAME}"
-exec dmoj -c /judge/judge.yml -p 9999 bridged
+cd /judge
+exec runuser -u judge -w PATH -- /env/bin/dmoj -c /judge/judge.yml -p 9999 bridged
