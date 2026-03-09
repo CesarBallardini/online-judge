@@ -1,0 +1,50 @@
+# DMOJ Online Judge (Docker Compose)
+
+> A containerized DMOJ competitive programming platform for LAN-based classroom use. Seven Docker services (MariaDB, Redis, Django, Celery, judge bridge, sandboxed judge, Nginx) orchestrated via Docker Compose. Supports two problem formats: standard stdin/stdout and R5RS Scheme unit testing with a custom grader.
+
+This file follows the [llms.txt specification](https://llmstxt.org/).
+
+Students submit code solutions to programming problems, which are compiled, executed in a sandbox, and judged against test cases. Data flow: student submits code -> nginx -> site -> db -> bridged -> judge (sandboxed execution) -> results back through bridged -> site updates db.
+
+Two problem formats exist. Standard (stdin/stdout): students write full programs with I/O, test cases are `.in`/`.out` file pairs. Unit-test (R5RS Scheme): students submit pure function definitions (no `#lang`, no I/O), a custom grader (`judge/scheme_grader.py`) loads student code into an R5RS sandbox and runs teacher-written unit tests from `tests.rkt`.
+
+All operations go through `manage.sh`: start/stop/rebuild services, Django commands, DB backup/restore, user/org/problem creation, CSV imports via REST API, and scheme problem deployment (`deploy-scheme-problem`).
+
+## Configuration
+
+- [docker-compose.yml](docker-compose.yml): Service orchestration for all 7 containers
+- [.env.example](.env.example): Environment template (secrets, DB credentials, network settings)
+- [manage.sh](manage.sh): CLI entry point for lifecycle, Django, DB, imports, and problem deployment
+
+## Site (Django)
+
+- [site/Dockerfile](site/Dockerfile): Python 3.11-slim, clones DMOJ source, installs dependencies
+- [site/dmoj/docker_settings.py](site/dmoj/docker_settings.py): Docker-specific Django settings
+- [site/dmoj_urls.py](site/dmoj_urls.py): URL routing (imports from dmoj.urls, NOT judge.urls)
+- [site/requirements.txt](site/requirements.txt): Python dependencies
+- [site/custom_commands/](site/custom_commands/): REST API endpoints and management commands
+
+## Judge
+
+- [judge/Dockerfile](judge/Dockerfile): Python 3.11-slim, installs dmoj judge, Racket, SWI-Prolog
+- [judge/start-judge.sh](judge/start-judge.sh): Startup script (runtime autoconf, judge.yml generation)
+- [judge/scheme_grader.py](judge/scheme_grader.py): R5RS unit-test grader (canonical source, deployed per-problem as grader.py)
+
+## Problem Templates
+
+- [scheme-example/max-of-numbers/](scheme-example/max-of-numbers/): Standard format example (stdin/stdout with .in/.out pairs)
+- [scheme-example/max-of-list/](scheme-example/max-of-list/): Unit-test format example (R5RS with tests.rkt)
+- [scheme-example/README.md](scheme-example/README.md): Problem format documentation and deployment guide
+
+## Infrastructure
+
+- [nginx/nginx.conf](nginx/nginx.conf): Nginx global settings (gzip, client_max_body_size)
+- [nginx/conf.d/default.conf](nginx/conf.d/default.conf): Reverse proxy to site, static/media serving
+- [config/mysql/my.cnf](config/mysql/my.cnf): MariaDB configuration
+- [mariadb/init/](mariadb/init/): Database initialization scripts (charset, timezone)
+
+## Optional
+
+- [CLAUDE.md](CLAUDE.md): Detailed project documentation for Claude Code
+- [AGENTS.md](AGENTS.md): Guidelines for AI coding agents
+- [data/imports/](data/imports/): CSV import templates for bulk user/problem creation
