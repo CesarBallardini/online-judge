@@ -79,7 +79,7 @@ docker-compose logs -f bridged           # Watch bridge communication logs
 - Wrapper creates R5RS sandbox (`make-evaluator 'r5rs`), loads student code, runs tests, outputs `RESULT:PASS|name` or `RESULT:FAIL|name|detail` lines
 - R5RS enforcement: `#lang` stripping, sandbox with `#:allow-for-require '()`, 5s/128MB per-expression limits
 - `tests.rkt` format: `(test "name" <expr> <expected>)` — use `error` as expected to test for exceptions
-- Problem time limit: 10+ seconds (sandbox startup ~2s)
+- Problem time limit: 10+ seconds (sandbox startup ~2s). Total process budget = time_limit × test count
 
 ## Common Tasks
 

@@ -5,9 +5,12 @@ Docker-specific DMOJ configuration - extends base DMOJ settings
 import os
 from dmoj.settings import *
 
-# Force PyMySQL as MySQLdb replacement (must be before any DB access)
+# Force PyMySQL as MySQLdb replacement (must be before any DB access).
+# The version spoof satisfies Django's mysqlclient>=1.4.3 check -- same
+# trick as upstream's dmoj_install_pymysql.py, which wsgi.py doesn't use.
 import pymysql
 pymysql.install_as_MySQLdb()
+pymysql.version_info = (1, 4, 3, 'final', 0)
 
 # Patch PyMySQL for compatibility with Django
 from pymysql.constants import ER
@@ -57,6 +60,13 @@ SESSION_CACHE_ALIAS = 'default'
 # Site
 SECRET_KEY = os.getenv('SECRET_KEY', 'change_this_secret_key_in_production')
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+
+# HTTPS -- nginx terminates TLS (self-signed cert) and sets X-Forwarded-Proto.
+# The site is reachable over both http and https, so trust both origins for CSRF.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_TRUSTED_ORIGINS = [
+    f'{scheme}://{host}' for host in ALLOWED_HOSTS for scheme in ('http', 'https')
+]
 SITE_URL = os.getenv('SITE_URL', 'http://localhost:8080')
 SITE_NAME = 'DMOJ'
 SITE_LONG_NAME = 'Don Mills Online Judge'
@@ -134,7 +144,8 @@ LOGGING = {
 }
 
 # Silence MariaDB-specific warnings about conditional unique constraints
-SILENCED_SYSTEM_CHECKS = ['models.W036']
+# and upstream DMOJ URL patterns that begin with '/' (harmless, not ours to fix)
+SILENCED_SYSTEM_CHECKS = ['models.W036', 'urls.W002']
 
 # --- Custom extensions --------------------------------------------------------
 

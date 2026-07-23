@@ -140,8 +140,9 @@ Copy `.env.example` to `.env` before first run.
 
 ### Port Access
 
-- **80**: Nginx (main entry point)
-- **8080**: Django dev server (direct access for debugging)
+- **80**: Nginx (main entry point, HTTP)
+- **443**: Nginx (HTTPS, self-signed cert from `./manage.sh gen-cert`, auto-generated on start)
+- **8080**: Gunicorn app server (direct access for debugging; no static files). Host port configurable via `SITE_PORT` in `.env`
 - **9999**: Bridge judge port (judges connect here)
 - **9998**: Bridge Django port (site pushes updates here)
 
@@ -211,4 +212,4 @@ Deploy: `./manage.sh deploy-scheme-problem <code>` (copies files + `judge/scheme
 
 **R5RS enforcement**: `#lang` stripping (rejects non-R5RS), sandbox evaluator (`#:allow-for-require '()`), per-expression resource limits (5s / 128MB).
 
-**Problem time limit**: Set to 10+ seconds (`--time-limit 10`) due to ~2s sandbox startup overhead.
+**Problem time limit**: Set to 10+ seconds (`--time-limit 10`) due to ~2s sandbox startup overhead. The grader scales the total process budget to time_limit × test count, since all tests run in one process.

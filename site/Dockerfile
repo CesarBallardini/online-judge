@@ -35,9 +35,14 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 
 WORKDIR /site
 
+# Pin DMOJ site to a known commit for reproducible builds
+# (master HEAD as of 2026-07-22; override with --build-arg to upgrade)
+ARG DMOJ_SITE_COMMIT=6aaddea6aaeabf4927b83787714509ff9fff8897
+
 # Clone DMOJ source code and initialize submodules
 RUN git clone https://github.com/DMOJ/site.git /tmp/dmoj-site && \
     cd /tmp/dmoj-site && \
+    git checkout ${DMOJ_SITE_COMMIT} && \
     git submodule init && \
     git submodule update && \
     cd / && \
@@ -104,4 +109,4 @@ RUN chmod +x /site/entrypoint.sh
 EXPOSE 8080
 
 ENTRYPOINT ["/site/entrypoint.sh"]
-CMD ["python", "manage.py", "runserver", "--insecure", "0.0.0.0:8080"]
+CMD ["gunicorn", "dmoj.wsgi:application", "--bind", "0.0.0.0:8080", "--workers", "4", "--timeout", "120"]

@@ -14,6 +14,10 @@ Deploy into each problem directory as ``grader.py`` via:
     ./manage.sh deploy-scheme-problem <problem-code>
 """
 
+import re
+import subprocess
+
+from dmoj.error import OutputLimitExceeded
 from dmoj.graders import StandardGrader
 from dmoj.result import Result
 
@@ -102,6 +106,11 @@ class Grader(StandardGrader):
         super().__init__(judge, problem, language, wrapper)
         self._test_results = None   # dict[int, (status, name, detail)]
         self._process_error = 0     # Result flag for process-level errors
+        # The wrapper runs the whole suite in one process, so the process
+        # budget is the per-case limit times the number of tests (the 5s
+        # per-expression sandbox limit is the real per-test guard).
+        tests = problem.problem_data['tests.rkt'].decode('utf-8')
+        self._num_tests = max(1, len(re.findall(r'^\s*\(test\s', tests, re.M)))
 
     # ---- wrapper construction -------------------------------------------------
 
@@ -134,12 +143,25 @@ class Grader(StandardGrader):
 
     def _run_all_tests(self, case):
         """Launch the wrapper once and parse every RESULT line."""
+        budget = self.problem.time_limit * self._num_tests
         self._current_proc = self.binary.launch(
-            time=self.problem.time_limit,
+            time=budget,
             memory=self.problem.memory_limit,
-            pipe_stderr=True,
+            symlinks=case.config.symlinks,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            wall_time=case.config.wall_time_factor * budget,
         )
-        output, error = self._current_proc.safe_communicate(b'')
+        try:
+            output, error = self._current_proc.communicate(
+                b'', outlimit=case.config.output_limit_length, errlimit=1048576
+            )
+        except OutputLimitExceeded:
+            output, error = b'', b''
+            self._current_proc.kill()
+        finally:
+            self._current_proc.wait()
 
         # Detect process-level TLE / MLE / RTE
         probe = Result(case)
@@ -184,7 +206,11 @@ class Grader(StandardGrader):
         if idx not in self._test_results:
             result.result_flag = Result.IE
             result.points = 0
-            result.feedback = 'Test did not produce output'
+            result.feedback = (
+                'No result for test #{} (got {}). Problem misconfigured: '
+                '(test ...) forms in tests.rkt must match init.yml test cases.'
+                .format(idx + 1, len(self._test_results))
+            )
             return result
 
         status, name, detail = self._test_results[idx]

@@ -44,3 +44,5 @@ redis
 importlib-metadata<5
 # REST API
 djangorestframework>=3.14
+# Production WSGI server
+gunicorn>=21

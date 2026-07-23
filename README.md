@@ -16,13 +16,18 @@ Docker Compose setup for running the [DMOJ](https://dmoj.ca) competitive program
 
 ## Quick Start
 
+**Prerequisites**: Docker with the Compose plugin (or `docker-compose`), bash, and openssl.
+
 ```bash
-# 1. First-time setup (generates secrets, builds, starts everything)
-./manage.sh init
+# 1. First-time setup -- prompts for the server's LAN IP and passwords,
+#    then generates secrets and the TLS certificate, builds, starts
+#    everything, and offers to create the admin account
+./manage.sh init          # or: make init
 
 # 2. Access the site
-# http://<HOST_IP>      (via nginx)
-# http://<HOST_IP>:8080 (direct to Django)
+# http://<HOST_IP>       (via nginx)
+# https://<HOST_IP>      (via nginx, self-signed cert -- accept the browser warning)
+# http://<HOST_IP>:8080  (direct to gunicorn -- debugging only, no static files)
 ```
 
 Or manually:
@@ -32,12 +37,14 @@ Or manually:
 cp .env.example .env
 # Edit .env -- set HOST_IP to your server's LAN IP and update passwords/keys
 
-# 2. Build and start
-./manage.sh start
+# 2. Build and start (generates the TLS certificate if missing)
+./manage.sh start         # or: make up
 
 # 3. Create admin account
-./manage.sh create-admin
+./manage.sh create-admin  # or: make create-admin
 ```
+
+Day-to-day operation is also available as `make` shortcuts (`make help` lists them): `make up`, `make down`, `make status`, `make logs SVC=judge`, etc.
 
 ## Configuration
 
@@ -181,6 +188,7 @@ Database:
 
 Setup:
   init              First-time setup: copy .env, generate secrets, build, start
+  gen-cert          (Re)generate self-signed TLS certificate for HOST_IP
   check             Run Django system checks
 
 Users:
@@ -213,8 +221,9 @@ Debug:
 
 | Port | Service | Purpose |
 |------|---------|---------|
-| 80 | nginx | Main entry point (LAN access) |
-| 8080 | site | Direct Django access (debugging) |
+| 80 | nginx | Main entry point (LAN access, HTTP) |
+| 443 | nginx | HTTPS (self-signed certificate) |
+| 8080 | site | Direct gunicorn access (debugging; no static files -- use port 80). Configurable via `SITE_PORT` in `.env` |
 | 9999 | bridged | Judge connection port |
 | 9998 | bridged | Site-to-bridge push updates |
 
@@ -226,7 +235,9 @@ Debug:
 
 **Static files missing:** Run `./manage.sh collectstatic`
 
-**Changing server IP:** Update `HOST_IP` in `.env` and restart: `./manage.sh rebuild`
+**Changing server IP:** Update `HOST_IP` in `.env`, regenerate the TLS certificate (`./manage.sh gen-cert`), and restart: `./manage.sh rebuild`
+
+**HTTPS:** The site is also served on port 443 with a self-signed certificate, generated automatically on first start (or via `./manage.sh gen-cert`). Browsers show a one-time warning for self-signed certificates -- accept it to continue.
 
 ## References
 

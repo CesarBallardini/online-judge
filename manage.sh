@@ -68,7 +68,10 @@ usage() {
     echo ""
     echo -e "${CYAN}Setup:${NC}"
     echo "  init              First-time setup: copy .env, generate secrets, build, start"
+    echo "  gen-cert          (Re)generate self-signed TLS certificate for HOST_IP"
     echo "  check             Run Django system checks"
+    echo "  verify [code]     End-to-end check: endpoints + judge a reference solution"
+    echo "                    (default problem: max-of-list)"
     echo ""
     echo -e "${CYAN}Organizations:${NC}"
     echo "  add-org                Create an organization"
@@ -117,9 +120,51 @@ usage() {
     echo "  See data/imports/*.example.csv for templates"
 }
 
+# --- TLS certificate ----------------------------------------------------------
+
+cmd_gen_cert() {
+    local dir="$SCRIPT_DIR/nginx/certs"
+    if ! command -v openssl &>/dev/null; then
+        error "openssl not found; cannot generate TLS certificate."
+        exit 1
+    fi
+    mkdir -p "$dir"
+
+    # SAN must cover however students reach the site (IP or hostname)
+    local san="DNS:localhost,IP:127.0.0.1"
+    case "$HOST_IP" in
+        localhost|127.0.0.1) ;;
+        *)
+            if [[ "$HOST_IP" =~ ^[0-9.]+$ ]]; then
+                san="IP:${HOST_IP},${san}"
+            else
+                san="DNS:${HOST_IP},${san}"
+            fi
+            ;;
+    esac
+
+    info "Generating self-signed TLS certificate (CN=${HOST_IP}, SAN: ${san})..."
+    # Run inside the certs dir with relative paths; MSYS_NO_PATHCONV stops
+    # Git Bash on Windows from mangling -subj (no-op on Linux).
+    ( cd "$dir" && MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+        -keyout dmoj.key -out dmoj.crt \
+        -subj "/CN=${HOST_IP}" \
+        -addext "subjectAltName=${san}" )
+    info "Certificate written to nginx/certs/dmoj.{crt,key} (valid 825 days)."
+    info "If HOST_IP changes, rerun './manage.sh gen-cert' and './manage.sh restart nginx'."
+}
+
+ensure_certs() {
+    if [ ! -f "$SCRIPT_DIR/nginx/certs/dmoj.crt" ] || [ ! -f "$SCRIPT_DIR/nginx/certs/dmoj.key" ]; then
+        info "No TLS certificate found, generating one..."
+        cmd_gen_cert
+    fi
+}
+
 # --- Commands -----------------------------------------------------------------
 
 cmd_start() {
+    ensure_certs
     info "Building and starting all services..."
     $COMPOSE_CMD up -d --build
     info "All services started. Run './manage.sh status' to check health."
@@ -142,6 +187,7 @@ cmd_restart() {
 }
 
 cmd_rebuild() {
+    ensure_certs
     if [ -n "$1" ]; then
         info "Rebuilding and restarting service: $1"
         $COMPOSE_CMD up -d --build "$1"
@@ -274,7 +320,17 @@ cmd_init() {
         exit 1
     fi
 
-    # 2. Generate secrets
+    # 2. Configure HOST_IP (drives ALLOWED_HOSTS, SITE_URL, and the TLS cert)
+    local current_ip new_ip
+    current_ip=$(grep '^HOST_IP=' "$SCRIPT_DIR/.env" | cut -d= -f2)
+    echo -n "Server LAN IP students will use to access the site [${current_ip}]: "
+    read -r new_ip
+    if [ -n "$new_ip" ]; then
+        sed -i "s|^HOST_IP=.*|HOST_IP=$new_ip|" "$SCRIPT_DIR/.env"
+        info "HOST_IP set to $new_ip"
+    fi
+
+    # 3. Generate secrets
     if command -v openssl &>/dev/null; then
         info "Generating secret keys..."
         secret_key=$(openssl rand -hex 32)
@@ -288,7 +344,7 @@ cmd_init() {
         warn "openssl not found. Please manually set SECRET_KEY, JUDGE_KEY, and BRIDGE_API_KEY in .env"
     fi
 
-    # 3. Database passwords
+    # 4. Database passwords
     echo ""
     echo -n "Generate random database passwords? [Y/n]: "
     read -r gen_pw
@@ -311,16 +367,17 @@ cmd_init() {
         sed -i "s|^MYSQL_PASSWORD=.*|MYSQL_PASSWORD=$mysql_pw|" "$SCRIPT_DIR/.env"
     fi
 
-    # 4. Build and start
+    # 5. Build and start
     echo ""
     info "Building and starting all services..."
     # Re-source .env with new values
     set -a
     source "$SCRIPT_DIR/.env"
     set +a
+    ensure_certs
     $COMPOSE_CMD up -d --build
 
-    # 5. Wait for health checks
+    # 6. Wait for health checks
     info "Waiting for services to become healthy..."
     local attempts=0
     local max_attempts=30
@@ -341,7 +398,7 @@ cmd_init() {
         info "All services are up."
     fi
 
-    # 6. Create superuser
+    # 7. Create superuser
     echo ""
     echo -n "Create a superuser account now? [Y/n]: "
     read -r create_su
@@ -356,6 +413,33 @@ cmd_init() {
 cmd_check() {
     info "Running Django system checks..."
     $COMPOSE_CMD exec site python manage.py check
+}
+
+cmd_verify() {
+    local code="${1:-max-of-list}"
+    local failed=0
+
+    info "Checking endpoints..."
+    for url in "http://localhost/" "https://localhost/" "http://localhost/static/style.css"; do
+        if curl -skf -o /dev/null "$url"; then
+            info "  OK   $url"
+        else
+            error "  FAIL $url"
+            failed=1
+        fi
+    done
+    [ "$failed" -eq 0 ] || exit 1
+
+    local sol="$SCRIPT_DIR/scheme-example/$code/solution.rkt"
+    if [ ! -f "$sol" ]; then
+        error "Reference solution not found: $sol"
+        exit 1
+    fi
+
+    info "Submitting reference solution for '$code' (expecting AC)..."
+    $COMPOSE_CMD exec -T site python manage.py submit_solution \
+        --problem "$code" --user admin --language RKT < "$sol"
+    info "Verification passed."
 }
 
 cmd_add_org() {
@@ -391,7 +475,7 @@ cmd_load_data() {
 
     if [ -z "$BEARER_TOKEN" ]; then
         info "Generating API token for admin user..."
-        BEARER_TOKEN=$(docker-compose exec -T site python manage.py generate_api_token admin 2>/dev/null | tr -d '\r\n')
+        BEARER_TOKEN=$($COMPOSE_CMD exec -T site python manage.py generate_api_token admin 2>/dev/null | tr -d '\r\n')
         if [ -z "$BEARER_TOKEN" ]; then
             error "Failed to generate API token. Make sure the 'admin' user exists."
             exit 1
@@ -456,6 +540,16 @@ cmd_deploy_scheme_problem() {
         error "Missing tests.rkt in $src"
         exit 1
     fi
+
+    # Validate: number of (test ...) forms must match test case count in init.yml
+    local test_count case_count
+    test_count=$(grep -c '^[[:space:]]*(test[[:space:]]' "$src/tests.rkt" || true)
+    case_count=$(grep -c 'points:' "$src/init.yml" || true)
+    if [ "$test_count" -ne "$case_count" ]; then
+        error "Test count mismatch: $test_count (test ...) forms in tests.rkt, but $case_count test cases in init.yml"
+        exit 1
+    fi
+    info "Validated: $test_count tests match $case_count test cases in init.yml"
 
     mkdir -p "$dst"
 
@@ -540,7 +634,9 @@ case "${1:-}" in
     restore)        shift; cmd_restore "$@" ;;
     dbshell)        cmd_dbshell ;;
     init)           cmd_init ;;
+    gen-cert)       cmd_gen_cert ;;
     check)          cmd_check ;;
+    verify)         shift; cmd_verify "$@" ;;
     add-org)        shift; cmd_add_org "$@" ;;
     add-teacher)    shift; cmd_add_teacher "$@" ;;
     create-problem) shift; cmd_create_problem "$@" ;;

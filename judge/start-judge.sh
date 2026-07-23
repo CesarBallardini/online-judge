@@ -13,10 +13,13 @@ echo "Detecting language runtimes..."
 /env/bin/dmoj-autoconf -V > /judge/runtime.yml 2>/dev/null || true
 
 # Create judge config
+# problem_storage_globs (not the deprecated problem_storage_root): with a
+# string root, dmoj expects problems one directory level deeper and finds none.
 cat > /judge/judge.yml << EOF
 id: ${JUDGE_NAME}
 key: ${JUDGE_KEY}
-problem_storage_root: /problems
+problem_storage_globs:
+  - /problems/*
 EOF
 
 if [ -s /judge/runtime.yml ]; then

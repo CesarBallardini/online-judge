@@ -11,10 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN useradd -m judge
 
-# Install DMOJ judge in a venv
+# Install DMOJ judge in a venv (pinned: patch_isolate.py targets 4.1.0 exactly)
 RUN python3 -m venv /env && \
     /env/bin/pip3 install cython setuptools && \
-    /env/bin/pip3 install dmoj
+    /env/bin/pip3 install dmoj==4.1.0
 
 # Patch isolate.py to fix Racket sandbox bug (remove once dmoj > 4.1.0)
 COPY patch_isolate.py /tmp/patch_isolate.py

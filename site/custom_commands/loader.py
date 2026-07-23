@@ -106,7 +106,9 @@ def load_users(rows, is_teacher=False, dry_run=False):
 
                 credentials.append({
                     'username': username,
-                    'password': password,
+                    # Only echo back generated passwords -- the caller
+                    # already knows the ones supplied in the CSV.
+                    'password': password if generated_pw else '(as provided)',
                     'generated': generated_pw,
                 })
                 created += 1

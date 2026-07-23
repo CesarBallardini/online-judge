@@ -95,7 +95,7 @@ This copies `init.yml`, `tests.rkt` from `scheme-example/max-of-list/` and the g
   --languages RKT
 ```
 
-**Important**: Use `--time-limit 10` (or higher) — the R5RS sandbox takes ~2 seconds to start.
+**Important**: Use `--time-limit 10` (or higher) — the R5RS sandbox takes ~2 seconds to start. The time limit is per test: the grader multiplies it by the number of tests for the total process budget, so slow (but individually bounded) tests never time out the whole suite.
 
 ### tests.rkt format
 
@@ -107,6 +107,9 @@ This copies `init.yml`, `tests.rkt` from `scheme-example/max-of-list/` and the g
 - `<expression>` is evaluated in the R5RS sandbox where the student's code is loaded
 - `<expected-value>` is compared with `equal?`
 - The keyword `error` means the test expects an exception
+- Note: R5RS has **no `error` procedure** -- student code cannot call `(error ...)`
+  (the sandbox rejects it as an unbound identifier). Error-expecting tests should
+  rely on natural errors, e.g. `(car '())` on an empty list
 - Number of `(test ...)` forms must match the number of entries in `init.yml`
 
 ### init.yml format
