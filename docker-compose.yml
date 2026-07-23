@@ -33,7 +33,9 @@ services:
     networks:
       - dmoj_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      # Official mariadb script -- authenticates as the dedicated healthcheck
+      # user, unlike bare `mysqladmin ping` which spams access-denied warnings
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
       timeout: 10s
       retries: 5

@@ -67,12 +67,14 @@ RUN npm install -g sass postcss-cli postcss autoprefixer
 # Compile SASS stylesheets
 RUN ./make_style.sh || echo "Warning: make_style.sh failed, continuing..."
 
+# Build-time manage.py needs our settings (compressor requires STATIC_ROOT)
+# and the directories they reference (logging opens /site/log/dmoj.log)
+ENV DJANGO_SETTINGS_MODULE=dmoj.docker_settings
+RUN mkdir -p /site/media /site/static /site/log /site/problems
+
 # Compile i18n messages
 RUN (python manage.py compilemessages || echo "Warning: compilemessages failed, continuing...") && \
     (python manage.py compilejsi18n || echo "Warning: compilejsi18n failed, continuing...")
-
-# Create necessary directories
-RUN mkdir -p /site/media /site/static /site/log /site/problems
 
 # Dry-run collectstatic to verify setup
 RUN python manage.py collectstatic --noinput --dry-run || true
